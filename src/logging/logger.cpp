@@ -32,16 +32,25 @@ int getMilliseconds() {
 #endif
 }
 
-void printLevelPrefix(char* buf, const Level level) {
+void setLevelPrefix(char* buf, const Level level) {
 
-    if( level == l_info )
-        buf[0] = 'I';
-    else if (level == l_error)
-        buf[0] = 'E';
-    else if(level == l_debug)
-        buf[0] = 'D';
-    else
-        buf[0] = 'T';
+    switch(level) {
+    case l_info:
+        *buf = 'I';
+        break;
+    case l_error:
+        *buf = 'E';
+        break;
+    case l_debug:
+        *buf = 'D';
+        break;
+    case l_trace:
+        *buf = 'T';
+        break;
+    default:
+        *buf = '*';
+        break;
+    }
     buf[1] = ' ';
 }
 
@@ -55,27 +64,22 @@ std::string getLogFileName(const std::string& logFilePrefix, time_t fileTime = t
     return logFilePrefix + "_" + timeFormatBuffer + ".log";
 }
 
-bool fileExists(const std::string& fileName) {
-
-    std::ifstream check(fileName);
-    return check.good();
-}
-
 int getDayOfMonth(time_t unixTime) {
     return localtime( &unixTime )->tm_mday;
 }
 
 struct LogMessage {
-    time_t msgTime;
-    int milliseconds;
-    const Level level;
-    std::string msg;
 
-    LogMessage(const std::stringstream& stream, const Level level_) :
-        msgTime( time(nullptr) ),
-        milliseconds( getMilliseconds() ),
-        level( level_ ),
-        msg( stream.str() )
+    time_t time_;
+    int milliseconds_;
+    const Level level_;
+    std::string text_;
+
+    LogMessage(const std::stringstream& stream, const Level level) :
+        time_( time(nullptr) ),
+        milliseconds_( getMilliseconds() ),
+        level_( level ),
+        text_( stream.str() )
     {
     }
 
@@ -83,10 +87,10 @@ struct LogMessage {
 
         char result[64];
 
-        printLevelPrefix(result, level);
-        const tm timeInfo = *localtime( &msgTime);
+        setLevelPrefix(result, level_);
+        const tm timeInfo = *localtime( &time_);
         size_t offset = 2+strftime(result+2, sizeof(result), "%Y.%m.%d %H:%M:%S", &timeInfo);
-        std::sprintf(result+offset, ".%03d ", milliseconds);
+        std::sprintf(result+offset, ".%03d ", milliseconds_);
 
         return result;
     }
@@ -98,46 +102,17 @@ public:
 
     LoggerImpl() {
         minLevel_ = l_trace;
-        logDir_ = ".";
         logFilePrefix_ = "log";
         guiLogMessageHandler_ = nullptr;
         guiLogMessageHandlerData_ = nullptr;
         run_ = false;
-        startFileThread();
+
+        setLogDir(".");
     }
 
-    void writeToFile(std::ofstream& file, const LogMessage& lm) {
-
-        std::string prefix = lm.getPrefix();
-
-        file << prefix << lm.msg << std::endl;
-
-        if(guiLogMessageHandler_)
-            guiLogMessageHandler_(guiLogMessageHandlerData_, prefix, lm.msg);
-    }
-
-    bool writeLogMessageQueueToFile(std::ofstream& file,
-                                    std::queue<LogMessage> &lmQueue,
-                                    int dayOfMonth,
-                                    const std::string &logFilePrefix)
-    {
-        while(!lmQueue.empty() && file.good()) {
-            LogMessage& lm = lmQueue.front();
-
-            int newDayOfMonth = getDayOfMonth(lm.msgTime);
-
-            //open new log file if day have passed
-            if(newDayOfMonth > dayOfMonth && !openNewLogFile(file, logFilePrefix) ) {
-                std::cerr << "Error opening log file"<< std::endl;
-                return false;
-            }
-
-            writeToFile(file, lm);
-            lmQueue.pop();
-
-            dayOfMonth = newDayOfMonth;
-        }
-        return true;
+    ~LoggerImpl() {
+        setMessageHandler(nullptr, nullptr);
+        stopFileThread();
     }
 
     void writeStream(std::stringstream &stream, Level level) {
@@ -148,48 +123,66 @@ public:
                 cv_.notify_one();
         }
     }
-    void setMessageHook(GuiLogMessageHandler handler, void *handlerData) {
+    void setMessageHandler(GuiLogMessageHandler handler, void *handlerData) {
         std::unique_lock<std::mutex> lk(writelock_);
         guiLogMessageHandlerData_ = handlerData;
         guiLogMessageHandler_ = handler;
     }
 
-    ~LoggerImpl() {
-        setMessageHook(nullptr, nullptr);
-        run_ = false;
-        if(worker_.joinable())
-            worker_.join();
-    }
-
     std::string getLogFilePrefix() {
+        std::unique_lock<std::mutex> lk(writelock_);
         return logFilePrefix_;
     }
     void setLogFilePrefix(const std::string &logFilePrefix) {
+
+        if(logFilePrefix_ == logFilePrefix)
+            return;
+
+        stopFileThread();
+
         logFilePrefix_ = logFilePrefix;
+
+        startFileThread();
     }
 
     std::string getLogDir() {
+        std::unique_lock<std::mutex> lk(writelock_);
         return logDir_;
     }
+
     void setLogDir(const std::string &logDir) {
 
-        //TODO
+        if(logDir_ == logDir)
+            return;
+
+        stopFileThread();
+
         logDir_ = logDir;
         if(!logDir_.empty()) {
             char lastChar = logDir_.at(logDir_.length() - 1);
             if(lastChar != '/' &&  lastChar != '\\')
                 logDir_ += '/';
         }
+        startFileThread();
+    }
+
+    Level getMinLevel() const {
+        return minLevel_;
+    }
+
+    void setMinLevel(const Level minLevel) {
+        minLevel_ = minLevel;
     }
 
 private:
+    std::mutex writelock_;
+
     Level minLevel_;
     std::string logDir_;
     std::string logFilePrefix_;
     GuiLogMessageHandler guiLogMessageHandler_;
     void *guiLogMessageHandlerData_;
     bool run_;
-    std::mutex writelock_;
     std::condition_variable cv_;
     std::thread worker_;
     std::queue<LogMessage> messageQueue_;
@@ -199,7 +192,7 @@ private:
         std::ofstream file;
 
         //BUG file prefix check
-        if(!openNewLogFile(file, logFilePrefix)) {
+        if(!openLogFile(file, logFilePrefix)) {
             std::cerr << "Error opening log file"<< std::endl;
             return;
         }
@@ -238,7 +231,14 @@ private:
         worker_ = std::thread(&Logger::LoggerImpl::threadProc, this, logDir_ + logFilePrefix_);
     }
 
-    bool openNewLogFile(std::ofstream& file, const std::string &logFilePrefix) {
+    void stopFileThread() {
+        run_ = false;
+        if(worker_.joinable())
+            worker_.join();
+    }
+
+
+    bool openLogFile(std::ofstream& file, const std::string &logFilePrefix) {
 
         if(file.is_open())
             file.close();
@@ -249,12 +249,48 @@ private:
 
         return file.good();
     }
+
+
+    void writeToFile(std::ofstream& file, const LogMessage& lm) {
+
+        std::string prefix = lm.getPrefix();
+
+        file << prefix << lm.text_ << std::endl;
+
+        if(guiLogMessageHandler_)
+            guiLogMessageHandler_(guiLogMessageHandlerData_, prefix, lm.text_);
+    }
+
+    bool writeLogMessageQueueToFile(std::ofstream& file,
+                                    std::queue<LogMessage> &lmQueue,
+                                    int dayOfMonth,
+                                    const std::string &logFilePrefix)
+    {
+        while(!lmQueue.empty() && file.good()) {
+            LogMessage& lm = lmQueue.front();
+
+            int newDayOfMonth = getDayOfMonth(lm.time_);
+
+            //open new log file if day have passed
+            if(newDayOfMonth > dayOfMonth && !openLogFile(file, logFilePrefix) ) {
+                std::cerr << "Error opening log file"<< std::endl;
+                return false;
+            }
+
+            writeToFile(file, lm);
+            lmQueue.pop();
+
+            dayOfMonth = newDayOfMonth;
+        }
+        return true;
+    }
 };
 
 Logger &Logger::instance() {
     static Logger instance;
     return instance;
 }
+
 Logger::Logger() :
     d_(new LoggerImpl)
 {
@@ -265,8 +301,8 @@ Logger::~Logger() {
     d_=nullptr;
 }
 
-void Logger::setMessageHook(GuiLogMessageHandler handler, void *handlerData) {
-    d_->setMessageHook(handler,handlerData);
+void Logger::setMessageHandler(GuiLogMessageHandler handler, void *handlerData) {
+    d_->setMessageHandler(handler,handlerData);
 }
 
 void Logger::writeStream(std::stringstream &stream, Level level) {
@@ -289,10 +325,12 @@ std::string Logger::getFilePrefix() {
     return d_->getLogFilePrefix();
 }
 
+Level Logger::getMinLevel() const {
+    return d_->getMinLevel();
+}
 
-
-
-
-
+void Logger::setMinLevel(const Level minLevel) {
+    d_->setMinLevel(minLevel);
+}
 
 } //ns logging

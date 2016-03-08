@@ -46,7 +46,7 @@ LoggingModel::LoggingModel(QObject *parent) :
     }
 
     connect(this, &LoggingModel::newMessage, &LoggingModel::onNewMessage);
-    logger->setMessageHook(&logging::logMessageHandler, this);
+    logger->setMessageHandler(&logging::logMessageHandler, this);
 }
 
 void LoggingModel::onNewMessage(QString m) {

@@ -7,14 +7,13 @@ TARGET = widget_tester
 TEMPLATE = app
 
 SOURCES += main.cpp\
-        mainwindow.cpp \
     ../logging/logger.cpp \
     ../logging/loggerwidget.cpp \
     ../logging/loggingmodel.cpp
 
-HEADERS  += mainwindow.h \
+HEADERS  += \
     ../logging/logger.h \
     ../logging/loggerwidget.h \
     ../logging/loggingmodel.h
 
-FORMS    += mainwindow.ui
+FORMS    +=
