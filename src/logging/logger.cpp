@@ -191,12 +191,6 @@ private:
 
         std::ofstream file;
 
-        //BUG file prefix check
-        if(!openLogFile(file, logFilePrefix)) {
-            std::cerr << "Error opening log file"<< std::endl;
-            return;
-        }
-
         int dayOfMonth = getDayOfMonth( time(0) );
 
         while(run_) {
@@ -237,7 +231,6 @@ private:
             worker_.join();
     }
 
-
     bool openLogFile(std::ofstream& file, const std::string &logFilePrefix) {
 
         if(file.is_open())
@@ -249,7 +242,6 @@ private:
 
         return file.good();
     }
-
 
     void writeToFile(std::ofstream& file, const LogMessage& lm) {
 
@@ -266,21 +258,20 @@ private:
                                     int dayOfMonth,
                                     const std::string &logFilePrefix)
     {
-        while(!lmQueue.empty() && file.good()) {
+        while(!lmQueue.empty()) {
             LogMessage& lm = lmQueue.front();
 
-            int newDayOfMonth = getDayOfMonth(lm.time_);
-
-            //open new log file if day have passed
-            if(newDayOfMonth > dayOfMonth && !openLogFile(file, logFilePrefix) ) {
-                std::cerr << "Error opening log file"<< std::endl;
-                return false;
+            if (!file.good() || //open if file is not open
+                 (getDayOfMonth(lm.time_) > dayOfMonth)) //open new log file if day have passed
+            {
+                if (!openLogFile(file, logFilePrefix)) {
+                    std::cerr << "Error opening log file"<< std::endl;
+                    return false;
+                }
             }
 
             writeToFile(file, lm);
             lmQueue.pop();
-
-            dayOfMonth = newDayOfMonth;
         }
         return true;
     }
