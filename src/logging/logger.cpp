@@ -174,6 +174,17 @@ public:
         minLevel_ = minLevel;
     }
 
+    void startFileThread() {
+        run_ = true;
+        worker_ = std::thread(&Logger::LoggerImpl::threadProc, this, logDir_ + logFilePrefix_);
+    }
+
+    void stopFileThread() {
+        run_ = false;
+        if(worker_.joinable())
+            worker_.join();
+    }
+
 private:
     std::mutex writelock_;
 
@@ -220,16 +231,6 @@ private:
         file.close();
     }
 
-    void startFileThread() {
-        run_ = true;
-        worker_ = std::thread(&Logger::LoggerImpl::threadProc, this, logDir_ + logFilePrefix_);
-    }
-
-    void stopFileThread() {
-        run_ = false;
-        if(worker_.joinable())
-            worker_.join();
-    }
 
     bool openLogFile(std::ofstream& file, const std::string &logFilePrefix) {
 
@@ -322,6 +323,11 @@ Level Logger::getMinLevel() const {
 
 void Logger::setMinLevel(const Level minLevel) {
     d_->setMinLevel(minLevel);
+}
+
+void Logger::stop()
+{
+    d_->stopFileThread();
 }
 
 } //ns logging

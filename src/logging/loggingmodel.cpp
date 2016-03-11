@@ -21,7 +21,7 @@ LoggingModel::LoggingModel(QObject *parent) :
     Logger *logger = &Logger::instance();
 
     QDir logsDir( QString::fromStdString(logger->getLogDir()) );
-    logsDir.setNameFilters( QStringList( QString::fromStdString(logger->getFilePrefix()) + "*.log") );
+    logsDir.setNameFilters( QStringList( QString::fromStdString(logger->getFilePrefix()) + "_*.log") );
 
     QStringList files = logsDir.entryList(QDir::Files, QDir::Name);
 
@@ -93,7 +93,7 @@ QVariant LoggingModel::data(const QModelIndex &index, int role) const
         } else if (role == Qt::ForegroundRole) {
 
             const QString& str = messages_.at( index.row() );
-            return QBrush( str[0] == 'E' ? Qt::red : Qt::black );
+            return QBrush( (!str.isEmpty() && str.at(0) == 'E') ? Qt::red : Qt::black );
         }
     }
 

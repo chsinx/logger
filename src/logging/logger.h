@@ -21,22 +21,34 @@ enum Level
 /// Handler for gui log message realtime output
 typedef void(*GuiLogMessageHandler)(void* data, const std::string& prefix, const std::string& msg);
 
-/// Controls life time of internal logging thread
+/// Logger singletone. Controls life time of internal logging thread
 class Logger
 {
 public:
+
     static Logger& instance();
     ~Logger();
 
+    ///set callback for custom logging widget etc
     void setMessageHandler(GuiLogMessageHandler handler, void *handlerData);
+
+    ///write stringstream to log. stream will be cleared
     void writeStream(std::stringstream& stream, Level level);
 
+    ///directory where all logs are placed
     void setLogDir(const std::string& logDir);
     std::string getLogDir();
+
+    ///Log file names are made of <prefix>_yyyymmdd.log
     void setLogFilePrefix(const std::string& logFilePrefix);
     std::string getFilePrefix();
-    Level getMinLevel() const;
+
+    ///Minimum level message filter
     void setMinLevel(const Level minLevel);
+    Level getMinLevel() const;
+
+    ///Stop logging threads. After calling this method all file io stops.
+    void stop();
 
 private:
     Logger();
