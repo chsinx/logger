@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <fstream>
@@ -106,6 +107,7 @@ public:
         guiLogMessageHandler_ = nullptr;
         guiLogMessageHandlerData_ = nullptr;
         run_ = false;
+        daysToKeep_ = 0;
 
         setLogDir(".");
     }
@@ -185,6 +187,13 @@ public:
             worker_.join();
     }
 
+
+    void setDaysToKeep(int daysToKeep)
+    {
+        daysToKeep_ = daysToKeep;
+    }
+
+
 private:
     std::mutex writelock_;
 
@@ -197,6 +206,7 @@ private:
     std::condition_variable cv_;
     std::thread worker_;
     std::queue<LogMessage> messageQueue_;
+    int daysToKeep_;
 
     void threadProc(const std::string& logFilePrefix) {
 
@@ -237,6 +247,12 @@ private:
         if(file.is_open())
             file.close();
 
+        //clean 1 old file for 24x7 applications
+        if (daysToKeep_>0) {
+            time_t removeTime = time(0) - daysToKeep_*24*3600;
+            remove(getLogFileName(logFilePrefix, removeTime).c_str());
+        }
+
         std::string filename = getLogFileName(logFilePrefix);
 
         file.open(filename, std::ios_base::app );
@@ -262,7 +278,7 @@ private:
         while(!lmQueue.empty()) {
             LogMessage& lm = lmQueue.front();
 
-            if (!file.good() || //open if file is not open
+            if (!file.is_open() || !file.good() || //open if file is not open
                  (getDayOfMonth(lm.time_) > dayOfMonth)) //open new log file if day have passed
             {
                 if (!openLogFile(file, logFilePrefix)) {
@@ -328,6 +344,11 @@ void Logger::setMinLevel(const Level minLevel) {
 void Logger::stop()
 {
     d_->stopFileThread();
+}
+
+void Logger::setDaysToKeep(int daysToKeep)
+{
+    d_->setDaysToKeep(daysToKeep);
 }
 
 } //ns logging

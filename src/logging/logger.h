@@ -50,6 +50,9 @@ public:
     ///Stop logging threads. After calling this method all file io stops.
     void stop();
 
+    ///auto-clean file interval (deletes only 1 file). Default = 0 <=> OFF
+    void setDaysToKeep(int daysToKeep);
+
 private:
     Logger();
     Logger(const Logger&);
