@@ -5,8 +5,6 @@
 
 class QTableView;
 
-namespace logging {
-
 class LoggingModel;
 
 class LoggerWidget : public QWidget
@@ -25,7 +23,5 @@ public:
 };
 
 
-
-} //ns logging
 
 #endif // LOGGERWIDGET_H

@@ -1,7 +1,3 @@
-rootdir=$$PWD/..
-
-message($$rootdir)
-
 CONFIG(debug, debug|release) {
     cfg=debug
     DEFINES += _DEBUG
@@ -9,9 +5,10 @@ CONFIG(debug, debug|release) {
     cfg=release
 }
 
+rootdir=$$PWD/..
 builddir=$$rootdir/tmp/$$cfg/$$TARGET
 
-INCLUDEPATH += $$rootdir/src
+INCLUDEPATH += $$rootdir/include
 
 RCC_DIR=$$builddir
 OBJECTS_DIR=$$builddir

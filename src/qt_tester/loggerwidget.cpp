@@ -7,7 +7,6 @@
 
 #include "loggingmodel.h"
 
-namespace logging {
 
 LoggingModel* LoggerWidget::model() {
 
@@ -36,5 +35,4 @@ LoggerWidget::~LoggerWidget()
 {
 }
 
-} //ns logging
 

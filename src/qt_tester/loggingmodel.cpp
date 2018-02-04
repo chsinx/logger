@@ -7,8 +7,7 @@
 #include <QFile>
 #include <QTextStream>
 
-namespace logging {
-
+using namespace logging;
 
 void logMessageHandler(void * data, const std::string &prefix, const std::string &msg)
 {
@@ -18,14 +17,15 @@ void logMessageHandler(void * data, const std::string &prefix, const std::string
 LoggingModel::LoggingModel(QObject *parent) :
     QAbstractTableModel(parent)
 {
+
     Logger *logger = &Logger::instance();
 
-    QDir logsDir( QString::fromStdString(logger->getLogDir()) );
-    logsDir.setNameFilters( QStringList( QString::fromStdString(logger->getFilePrefix()) + "_*.log") );
+    QDir logsDir( QString::fromStdString(logger->getOutputDirectory()) );
+    logsDir.setNameFilters( QStringList( QString::fromStdString(logger->getBaseFileName()) + "_*.log") );
 
     QStringList files = logsDir.entryList(QDir::Files, QDir::Name);
 
-    while(!files.empty() && messages_.size() < kMaxMessages) {
+    while(!files.empty() && messages_.size() < MAX_MESSAGES_DISPLAYED) {
         QString file = files.back();
         files.pop_back();
 
@@ -46,7 +46,7 @@ LoggingModel::LoggingModel(QObject *parent) :
     }
 
     connect(this, &LoggingModel::newMessage, &LoggingModel::onNewMessage);
-    logger->setMessageHandler(&logging::logMessageHandler, this);
+    logger->setMessageHandler(&::logMessageHandler, this);
 }
 
 void LoggingModel::onNewMessage(QString m) {
@@ -55,7 +55,7 @@ void LoggingModel::onNewMessage(QString m) {
         messages_.append( m );
         endInsertRows();
 
-        if(messagesCount > kMaxMessages) {
+        if(messagesCount > MAX_MESSAGES_DISPLAYED) {
             beginRemoveRows(QModelIndex(), 0,0);
             messages_.removeFirst();
             endRemoveRows();
@@ -116,5 +116,3 @@ Qt::ItemFlags LoggingModel::flags(const QModelIndex &index) const
 
     return QAbstractTableModel::flags(index);
 }
-
-} //ns logging
